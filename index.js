@@ -2,49 +2,72 @@ import {
   Client,
   PrivateKey,
   TopicCreateTransaction,
+  TopicInfoQuery,
   TopicMessageSubmitTransaction,
+  TopicUpdateTransaction,
 } from '@hashgraph/sdk';
 import { ACC_ID, PRIV_KEY } from './config/env.js';
 
-const client = Client.forTestnet();
+async function run() {
+  const client = Client.forTestnet();
 
-const operatorKey = PrivateKey.fromString(PRIV_KEY);
+  const operatorKey = PrivateKey.fromString(PRIV_KEY);
 
-const adminKey = PrivateKey.generate();
-const submitKey = PrivateKey.generate();
+  const adminKey = PrivateKey.generate();
+  const submitKey = PrivateKey.generate();
 
-client.setOperator(ACC_ID, operatorKey);
+  client.setOperator(ACC_ID, operatorKey);
 
-const topic = new TopicCreateTransaction()
-  .setAdminKey(adminKey)
-  .setSubmitKey(submitKey)
-  .setTopicMemo('First Memo')
-  .freezeWith(client);
+  const topic = new TopicCreateTransaction()
+    .setAdminKey(adminKey)
+    .setSubmitKey(submitKey)
+    .setTopicMemo('First Memo')
+    .freezeWith(client);
 
-const signedTx1 = await topic.sign(adminKey);
+  const signedTx1 = await topic.sign(adminKey);
 
-const signedTx2 = await signedTx1.sign(submitKey);
+  const signedTx2 = await signedTx1.sign(submitKey);
 
-const txResponse = await signedTx2.execute(client);
+  const txResponse = await signedTx2.execute(client);
 
-const receipt = await txResponse.getReceipt(client);
+  const receipt = await txResponse.getReceipt(client);
 
-const topicId = receipt.topicId;
+  const topicId = receipt.topicId;
 
-console.log(`The new topic ID is ${topicId}`);
+  const topicInfoResponse = await new TopicInfoQuery()
+    // @ts-ignore
+    .setTopicId(topicId)
+    .execute(client);
 
-console.log(`Topic memo: ${topic.getTopicMemo()}`);
+  console.log(`The topic ID is: ${topicInfoResponse.topicId}`);
 
-topic.setTopicMemo('Another memo');
+  console.log(`Topic memo is: ${topicInfoResponse.topicMemo}`);
 
-console.log(`New memo: ${topic.getTopicMemo()}`);
+  const updateTransact = new TopicUpdateTransaction()
+    // @ts-ignore
+    .setTopicId(topicId)
+    .setTopicMemo('Another memo !')
+    .freezeWith(client);
 
-//Create the transaction
-const transaction = await new TopicMessageSubmitTransaction()
-  .setTopicId(topicId.toString())
-  .setMessage('hello this is my first message! ')
-  .execute(client);
+  const sign3 = await updateTransact.sign(adminKey);
+  const sign4 = await sign3.sign(submitKey);
+  await sign4.execute(client);
 
-//Get the transaction message
+  const topicInfoResponse2 = await new TopicInfoQuery()
+    // @ts-ignore
+    .setTopicId(topicId)
+    .execute(client);
 
-console.log(`Topic message: ${transaction}`);
+  console.log(`Updated Topic memo: ${topicInfoResponse2.topicMemo}`);
+
+  const message = await new TopicMessageSubmitTransaction()
+    // @ts-ignore
+    .setTopicId(topicId)
+    .setMessage('This is my message !')
+    .execute(client);
+
+  console.log(`Topic message: ${message}`);
+  return;
+}
+
+run().catch((err) => console.log(err));
