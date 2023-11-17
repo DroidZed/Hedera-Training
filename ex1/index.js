@@ -1,4 +1,5 @@
 import {
+  AccountId,
   Client,
   PrivateKey,
   TopicCreateTransaction,
@@ -9,14 +10,13 @@ import {
 import { ACC_ID, PRIV_KEY } from './config/env.js';
 
 async function run() {
-  const client = Client.forTestnet();
-
   const operatorKey = PrivateKey.fromString(PRIV_KEY);
+  const accountId = AccountId.fromString(ACC_ID);
 
   const adminKey = PrivateKey.generate();
   const submitKey = PrivateKey.generate();
 
-  client.setOperator(ACC_ID, operatorKey);
+  const client = Client.forTestnet().setOperator(accountId, operatorKey);
 
   const topic = new TopicCreateTransaction()
     .setAdminKey(adminKey)
@@ -34,14 +34,17 @@ async function run() {
 
   const topicId = receipt.topicId;
 
+  // wait 5 seconds between consensus topic creation and subscription topic creation
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+
   const topicInfoResponse = await new TopicInfoQuery()
     // @ts-ignore
     .setTopicId(topicId)
     .execute(client);
 
-  console.log(`The topic ID is: ${topicInfoResponse.topicId}`);
+  console.log(` >> The topic ID is: ${topicInfoResponse.topicId}`);
 
-  console.log(`Topic memo is: ${topicInfoResponse.topicMemo}`);
+  console.log(` >> Topic memo is: ${topicInfoResponse.topicMemo}`);
 
   const updateTransact = new TopicUpdateTransaction()
     // @ts-ignore
@@ -58,7 +61,7 @@ async function run() {
     .setTopicId(topicId)
     .execute(client);
 
-  console.log(`Updated Topic memo: ${topicInfoResponse2.topicMemo}`);
+  console.log(` -- Updated Topic memo: ${topicInfoResponse2.topicMemo}`);
 
   const message = await new TopicMessageSubmitTransaction()
     // @ts-ignore
@@ -66,7 +69,7 @@ async function run() {
     .setMessage('This is my message !')
     .execute(client);
 
-  console.log(`Topic message: ${message}`);
+  console.log(`*** Topic message: ${message} ***`);
   return;
 }
 
