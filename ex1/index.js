@@ -18,24 +18,18 @@ async function run() {
 
   const client = Client.forTestnet().setOperator(accountId, operatorKey);
 
-  const topic = new TopicCreateTransaction()
+  let topic = new TopicCreateTransaction()
     .setAdminKey(adminKey)
     .setSubmitKey(submitKey)
     .setTopicMemo('First Memo')
     .freezeWith(client);
 
   const signedTx1 = await topic.sign(adminKey);
-
   const signedTx2 = await signedTx1.sign(submitKey);
-
   const txResponse = await signedTx2.execute(client);
 
   const receipt = await txResponse.getReceipt(client);
-
   const topicId = receipt.topicId;
-
-  // wait 5 seconds between consensus topic creation and subscription topic creation
-  await new Promise((resolve) => setTimeout(resolve, 5000));
 
   const topicInfoResponse = await new TopicInfoQuery()
     // @ts-ignore
@@ -46,7 +40,7 @@ async function run() {
 
   console.log(` >> Topic memo is: ${topicInfoResponse.topicMemo}`);
 
-  const updateTransact = new TopicUpdateTransaction()
+  let updateTransact = new TopicUpdateTransaction()
     // @ts-ignore
     .setTopicId(topicId)
     .setTopicMemo('Another memo !')
