@@ -47,7 +47,7 @@ async function main() {
 
 async function deployContract(client) {
   const contractCreate = new ContractCreateFlow()
-    .setGas(100000)
+    .setGas(100_000)
     .setConstructorParameters(
       new ContractFunctionParameters().addAddress(
         '0x98e268680db0ff02dfa8131a4074893c464aeacd'
@@ -56,10 +56,10 @@ async function deployContract(client) {
     .setBytecode(bytecode);
 
   const txResponse = await contractCreate.execute(client);
-  const receipt = await (await txResponse).getReceipt(client);
-  const newContractId = await receipt.contractId;
+  const receipt = await txResponse.getReceipt(client);
+  const newContractId = receipt.contractId;
 
-  console.log('The new contract id is ' + newContractId);
+  console.log(`The new contract id is ${newContractId}`);
   return newContractId;
 }
 
@@ -81,7 +81,7 @@ async function callSetAddress(client, contractId, newAddress) {
 async function callGetAddress(client, contractId) {
   const getAddress = new ContractCallQuery()
     .setContractId(contractId)
-    .setGas(210000)
+    .setGas(210_000)
     .setFunction('get_address');
 
   const contractCallResult = await getAddress.execute(client);
