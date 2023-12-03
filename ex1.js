@@ -8,7 +8,7 @@ import {
   TopicMessageSubmitTransaction,
   TopicUpdateTransaction,
 } from '@hashgraph/sdk';
-import { ACC_ID, PRIV_KEY } from './ex1/config/env.js';
+import { ACC_ID, PRIV_KEY } from './config/env.js';
 
 async function run() {
   // loading keys from env

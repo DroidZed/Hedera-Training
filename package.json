@@ -1,12 +1,12 @@
 {
-  "name": "hedera-training-2",
+  "name": "hedera-training",
   "version": "1.0.0",
   "description": "",
   "type": "module",
-  "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev1": "nodemon ex1.js",
+    "dev2": "nodemon ex2.js",
+    "dev3": "nodemon ex3.js"
   },
   "keywords": [],
   "author": "",
