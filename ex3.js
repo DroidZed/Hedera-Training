@@ -1,3 +1,17 @@
+/**
+Exercise 3: Smart contract service
+You'll need to create an account in addition to your testnet account.
+Using the : 
+HelloHedera.sol (This smart contract allows you to store and change the address of an account)
+HelloHedera.json (compiled contract)
+And using the smart contract service:
+Deploy the smart contract on Hedera (using ContractCreateFlow() and bytecode)
+Call the get_address function and display the address of your testnet account.
+Call the set_address function, specifying the address of the new account.
+Call the get_address function again to check that the address has been modified
+
+ */
+
 import { readFileSync } from 'fs';
 import {
   Client,
@@ -56,6 +70,8 @@ async function main() {
   console.log('============== FIN ===========');
 
   client.close();
+
+  return;
 }
 
 async function deployContract(client, adminKey, byteCode) {
@@ -64,7 +80,7 @@ async function deployContract(client, adminKey, byteCode) {
     .setBytecode(byteCode)
     .setConstructorParameters(
       new ContractFunctionParameters().addAddress(
-        '0x98e268680db0ff02dfa8131a4074893c464aeacd'
+        EvmAddress.fromString('0x98e268680db0ff02dfa8131a4074893c464aeacd')
       )
     )
     .setGas(100_000)
@@ -98,7 +114,9 @@ async function setAddress(client, contractId, newAddress, adminKey) {
     .setGas(100_000)
     .setFunction(
       'set_address',
-      new ContractFunctionParameters().addAddress(newAddress)
+      new ContractFunctionParameters().addAddress(
+        EvmAddress.fromString(newAddress)
+      )
     )
     .freezeWith(client)
     .sign(adminKey);

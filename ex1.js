@@ -1,3 +1,16 @@
+/**
+Exercise 1: Consensus Service
+Use the account created on testnet.
+Using the consensus service: 
+Create a topic with a different adminKey and submitKey and add a memo.
+Return topic information (TopicId and memo)
+Modify the topic's memo
+Display modified topic information (new memo)
+Submit a message to the topic
+Display the message published on the topic
+
+ */
+
 import {
   AccountId,
   Client,
@@ -70,6 +83,7 @@ async function run() {
   const sign3 = await updateTransact.sign(adminKey);
   const sign4 = await sign3.sign(submitKey);
   await sign4.execute(client);
+  await new Promise((resolve) => setTimeout(resolve, 5000));
   // querying the result again
   const topicInfoResponse2 = await new TopicInfoQuery()
     // @ts-ignore
@@ -86,6 +100,8 @@ async function run() {
 
   // displaying the message
   console.log(`*** Topic message: ${message} ***\n`);
+
+  console.log('============== FIN ===========');
 
   client.close();
 

@@ -1,9 +1,30 @@
-// @ts-nocheck
+/**
+ * Exercise 2: Token Service
+For this exercise you'll need to create 2 additional accounts. 
+You will therefore need 3 accounts for this exercise (the portal testnet account and the 2 new accounts).
+Using Token Service : 
+**Create a collection of NFTs with at least one memo, an adminKey, a supplyKey, Custom Fees (5% royalty fee) 
+**and a Fee Schedule Key. 
+**The 3 keys specified must be different.
+**Display newly created NFT information
+**Edit NFT memo
+**Display NFT information with modification made
+**Mint an NFT on the collection (metadata to be specified are free)
+*!Transfer NFT from account A to account B
+*?Display the balance of the various accounts involved (account A, account B and account defined as receiving royalty fees)
+*?Modify custom fees to increase royalty percentage to 10%.
+*?Mine a second NFT from the collection
+*?Transfer the second NFT from account A to account B
+*?Display the balance of the various accounts involved (account A, account B and account defined as receiving royalty fees)
+
+ */
+
 import {
   AccountBalanceQuery,
   AccountCreateTransaction,
   AccountId,
   Client,
+  CustomFixedFee,
   CustomRoyaltyFee,
   Hbar,
   PrivateKey,
@@ -21,201 +42,353 @@ import { ACC_ID, PRIV_KEY } from './config/env.js';
 
 async function main() {
   // Set up the client
-  const myAccountId = AccountId.fromString(ACC_ID);
-  const myAccountKey = PrivateKey.fromString(PRIV_KEY);
+  const operatorId = AccountId.fromString(ACC_ID);
+  const operatorPrivKey = PrivateKey.fromString(PRIV_KEY);
 
-  const client = Client.forTestnet();
-  client.setOperator(myAccountId, myAccountKey);
-
-  //Create 2 new accounts
-  const account1pvk = await PrivateKey.generateED25519();
-  const account1pbk = account1pvk.publicKey;
-  const account1T = await new AccountCreateTransaction()
-    .setKey(account1pbk)
-    .setInitialBalance(new Hbar(1000))
-    .execute(client);
-
-  const rec1 = await account1T.getReceipt(client);
-  const account1 = rec1.accountId;
-  console.log('First account', account1);
-
-  const account2pvk = await PrivateKey.generateED25519();
-  const account2pbk = account2pvk.publicKey;
-  const account2T = await new AccountCreateTransaction()
-    .setKey(account2pbk)
-    .setInitialBalance(new Hbar(1000))
-    .execute(client);
-
-  const rec2 = await account2T.getReceipt(client);
-  const account2 = rec2.accountId;
-
-  //Create an NFT collection
-
-  const royaltyFee = new CustomRoyaltyFee()
-    .setNumerator(1)
-    .setDenominator(10)
-    .setFeeCollectorAccountId(myAccountId);
-
-  const customFee = [royaltyFee];
-
-  const nftCreate = await new TokenCreateTransaction()
-    .setTokenName('DroidZed NFT Collection')
-    .setTokenSymbol('Light')
-    .setTreasuryAccountId(myAccountId)
-    .setTokenType(TokenType.NonFungibleUnique)
-    .setCustomFees(customFee)
-    .setTokenMemo('The best collection in the NFTverse.')
-    .setSupplyType(TokenSupplyType.Finite)
-    .setMaxSupply(250)
-    .setSupplyKey(myAccountKey)
-    .setFeeScheduleKey(myAccountKey)
-    .setMaxTransactionFee(100000)
-    .freezeWith(client);
-
-  const nftCreateTxSign = await nftCreate.sign(myAccountKey);
-  const nftCreateSubmit = await nftCreateTxSign.execute(client);
-  const nftCreateRx = await nftCreateSubmit.getReceipt(client);
-
-  //Display NFT collection information
-  const tokenInfo = await new TokenInfoQuery()
-    .setTokenId(nftCreateRx.tokenId)
-    .execute(client);
-
-  console.log(`Token info: ${tokenInfo}`);
-
-  //Update the NFT collection memo
-  const newMemo = 'Lightency collection.';
-  const nftUpdate = await new TokenUpdateTransaction()
-    .setTokenId(nftCreateRx.tokenId)
-    .setTokenMemo(newMemo)
-    .freezeWith(client);
-
-  const nftUpdateTxSign = await nftUpdate.sign(myAccountKey);
-  const nftUpdateSubmit = await nftUpdateTxSign.execute(client);
-  await nftUpdateSubmit.getReceipt(client);
-
-  const tokenInfo2 = await new TokenInfoQuery()
-    .setTokenId(nftCreateRx.tokenId)
-    .execute(client);
-  console.log('NFT infos 2.0', tokenInfo2);
-
-  const metadataString = 'NFT1';
   const encoder = new TextEncoder();
-  const metadataUint8Array = encoder.encode(metadataString);
 
-  const nftMint = await new TokenMintTransaction()
-    .setTokenId(nftCreateRx.tokenId)
-    .setMetadata([metadataUint8Array])
-    .freezeWith(client);
+  const client = Client.forTestnet().setOperator(operatorId, operatorPrivKey);
 
-  const nftMintTxSign = await nftMint.sign(myAccountKey);
-  const nftMintSubmit = await nftMintTxSign.execute(client);
-  await nftMintSubmit.getReceipt(client);
+  const accKey1 = PrivateKey.generateED25519();
+  const accKey2 = PrivateKey.generateED25519();
+  const supplyKey = PrivateKey.generateED25519();
+  const feeScheduleKey = PrivateKey.generateED25519();
 
-  const nftAssociate = await new TokenAssociateTransaction()
-    .setAccountId(account1)
-    .setTokenIds([nftCreateRx.tokenId])
-    .freezeWith(client);
+  const { accountId: accountId1, status: accStatus1 } = await createAccount(
+    client,
+    operatorPrivKey,
+    accKey1
+  );
+  console.log(
+    `>> 1st Account Creation status: ${accStatus1}\n\tCreated acc id: ${accountId1}\n`
+  );
 
-  const nftAssociateTxSign = await nftAssociate.sign(account1pvk);
-  const nftAssociateSubmit = await nftAssociateTxSign.execute(client);
-  await nftAssociateSubmit.getReceipt(client);
+  const { accountId: accountId2, status: accStatus2 } = await createAccount(
+    client,
+    operatorPrivKey,
+    accKey2
+  );
+  console.log(
+    `>> 2nd Account Creation status: ${accStatus2}\n\tCreated acc id: ${accountId2}\n`
+  );
 
-  //Transfer
-  const nftTransfer = await new TransferTransaction()
-    .addNftTransfer(nftCreateRx.tokenId, 1, myAccountId, account1)
-    .freezeWith(client);
+  const royaltyFee = generateRoyaltyFee(operatorId, 5, 100);
 
-  const nftTransferTxSign = await nftTransfer.sign(myAccountKey);
-  const nftTransferSubmit = await nftTransferTxSign.execute(client);
-  await nftTransferSubmit.getReceipt(client);
+  const { tokenId, status: tokenCreationStatus } = await createNFT(
+    client,
+    operatorPrivKey,
+    feeScheduleKey,
+    supplyKey,
+    'My Bored APE',
+    operatorId,
+    [royaltyFee]
+  );
+  console.log(
+    `>> Token Creation status: ${tokenCreationStatus}\n\tCreated token id: ${tokenId}\n`
+  );
 
-  //Display account balances
-  const accountBalances1 = await new AccountBalanceQuery()
-    .setAccountId(myAccountId)
+  const createdTokenInfo = await new TokenInfoQuery()
+    // @ts-ignore
+    .setTokenId(tokenId)
     .execute(client);
+  console.log('>> Created token:');
+  console.table(createdTokenInfo);
 
-  console.log(accountBalances1.tokens.toString());
+  console.log('\n');
 
-  const accountBalances2 = await new AccountBalanceQuery()
-    .setAccountId(account1)
+  const tokenUpdateStatus = await updateNFTMemo(
+    client,
+    operatorPrivKey,
+    tokenId,
+    "DroidZed's Awesome NFT Collection!"
+  );
+  console.log(`>> Token Update status: ${tokenUpdateStatus}\n`);
+
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+
+  const updatedTokenInfo = await new TokenInfoQuery()
+    // @ts-ignore
+    .setTokenId(tokenId)
     .execute(client);
-  console.log('balance 1', accountBalances2.tokens.toString());
+  console.log(`>> Updated token info:`);
+  console.table(updatedTokenInfo);
 
-  const accountBalances3 = await new AccountBalanceQuery()
-    .setAccountId(account2)
-    .execute(client);
-  console.log('balance 2', accountBalances3.tokens.toString());
+  console.log('\n');
 
-  //Modify custom fees
-  const newRoyaltyFee = new CustomRoyaltyFee()
-    .setNumerator(1)
-    .setDenominator(5)
-    .setFeeCollectorAccountId(myAccountId);
+  const metadataUint8Array = [encoder.encode('Z-NFT-v1.0')];
 
-  const newCustomFee = [newRoyaltyFee];
+  const firstMintStatus = await mintNFT(
+    client,
+    tokenId,
+    supplyKey,
+    metadataUint8Array
+  );
 
-  const nftUpdateFee = await new TokenFeeScheduleUpdateTransaction()
-    .setTokenId(nftCreateRx.tokenId)
-    .setCustomFees(newCustomFee)
-    .freezeWith(client);
+  console.log(`>> First token mined status: ${firstMintStatus}\n`);
 
-  const nftUpdateFeeTxSign = await nftUpdateFee.sign(myAccountKey);
-  const nftUpdateFeeSubmit = await nftUpdateFeeTxSign.execute(client);
-  await nftUpdateFeeSubmit.getReceipt(client);
+  const tokenAssocStatus = await associateNFTAndUser(
+    client,
+    tokenId,
+    accountId1,
+    accKey1
+  );
 
-  //Mint NFT2
-  const metadata2String = 'Lightency NFT 1';
-  const metadataUint8Array2 = encoder.encode(metadata2String);
+  console.log(`>> First token associated status: ${tokenAssocStatus}\n`);
 
-  const nft2Mint = await new TokenMintTransaction()
-    .setTokenId(nftCreateRx.tokenId)
-    .setMetadata([metadataUint8Array2])
-    .freezeWith(client);
+  const { balanceInBars: barsR, nbTokens: nbTokensR } =
+    await queryAccountBalance(client, operatorId);
+  const { balanceInBars: barsA, nbTokens: nbTokensA } =
+    await queryAccountBalance(client, operatorId);
+  const { balanceInBars: barsB, nbTokens: nbTokensB } =
+    await queryAccountBalance(client, operatorId);
 
-  const nft2MintTxSign = await nft2Mint.sign(myAccountKey);
-  const nft2MintSubmit = await nft2MintTxSign.execute(client);
-  await nft2MintSubmit.getReceipt(client);
-  console.log('NFT 2');
+  console.log(
+    `
+    Accounts balance before transfer:\
+    \n\tAdmin: ${barsR}HBAR - ${nbTokensR} Tokens\
+    \n\tAccount A: ${barsA}HBAR - ${nbTokensA} Tokens\
+    \n\tAccount B: ${barsB}HBAR - ${nbTokensB} Tokens\
+    \n`
+  );
 
-  //Associate account 2 with the NFT
-  const nft2Associate = await new TokenAssociateTransaction()
-    .setAccountId(account2)
-    .setTokenIds([nftCreateRx.tokenId])
-    .freezeWith(client);
+  const nftTransferStatus = await transferNFT(
+    client,
+    tokenId,
+    accountId1,
+    accountId2,
+    accKey1
+  );
 
-  const nft2AssociateTxSign = await nft2Associate.sign(account2pvk);
-  const nft2AssociateSubmit = await nft2AssociateTxSign.execute(client);
-  await nft2AssociateSubmit.getReceipt(client);
+  console.log(`>> NFT transfer status: ${nftTransferStatus}\n`);
 
-  //Transfer the second NFT
-  const nft2Transfer = await new TransferTransaction()
-    .addNftTransfer(nftCreateRx.tokenId, 2, myAccountId, account2)
-    .freezeWith(client);
+  const { balanceInBars: barsR2, nbTokens: nbTokensR2 } =
+    await queryAccountBalance(client, operatorId);
+  const { balanceInBars: barsA2, nbTokens: nbTokensA2 } =
+    await queryAccountBalance(client, operatorId);
+  const { balanceInBars: barsB2, nbTokens: nbTokensB2 } =
+    await queryAccountBalance(client, operatorId);
 
-  const nft2TransferTxSign = await nft2Transfer.sign(myAccountKey);
-  const nft2TransferSubmit = await nft2TransferTxSign.execute(client);
-  await nft2TransferSubmit.getReceipt(client);
+  console.log(
+    `
+    Accounts balance after transfer:\
+    \n\tAdmin: ${barsR2}HBAR - ${nbTokensR2} Tokens\
+    \n\tAccount A: ${barsA2}HBAR - ${nbTokensA2} Tokens\
+    \n\tAccount B: ${barsB2}HBAR - ${nbTokensB2} Tokens\
+    \n`
+  );
 
-  //Display updated account balances
-  const accountBalances4 = await new AccountBalanceQuery()
-    .setAccountId(myAccountId)
-    .execute(client);
-  console.log(accountBalances4.tokens.toString());
+  // *******************************************************************
 
-  const accountBalances5 = await new AccountBalanceQuery()
-    .setAccountId(account1)
-    .execute(client);
-  console.log(accountBalances5.tokens.toString());
+  const newRoyaltyFee = generateRoyaltyFee(operatorId, 10, 100);
 
-  const accountBalances6 = await new AccountBalanceQuery()
-    .setAccountId(account2)
-    .execute(client);
-  console.log(accountBalances6.tokens.toString());
+  const royaltyFeeUpdateStatus = await updateRoyaltyFees(
+    client,
+    feeScheduleKey,
+    tokenId,
+    newRoyaltyFee
+  );
+
+  console.log(`>> NFT royalty update fee status: ${royaltyFeeUpdateStatus}\n`);
+
+  const metadataUint8Array2 = [encoder.encode('Z-NFT-v2.0')];
+
+  const firstMintStatus2 = await mintNFT(
+    client,
+    tokenId,
+    supplyKey,
+    metadataUint8Array2
+  );
+
+  console.log(`>> Second token mined status: ${firstMintStatus2}\n`);
+
+  const tokenAssocStatus2 = await associateNFTAndUser(
+    client,
+    tokenId,
+    accountId1,
+    accKey1
+  );
+
+  console.log(`>> First token associated status: ${tokenAssocStatus2}\n`);
+
+  const nftTransferStatus2 = await transferNFT(
+    client,
+    tokenId,
+    accountId1,
+    accountId2,
+    accKey1
+  );
+
+  console.log(`>> NFT transfer status: ${nftTransferStatus2}\n`);
+
+  const { balanceInBars: barsR3, nbTokens: nbTokensR3 } =
+    await queryAccountBalance(client, operatorId);
+  const { balanceInBars: barsA3, nbTokens: nbTokensA3 } =
+    await queryAccountBalance(client, operatorId);
+  const { balanceInBars: barsB3, nbTokens: nbTokensB3 } =
+    await queryAccountBalance(client, operatorId);
+
+  console.log(
+    `
+    Accounts balance after second transfer:\
+    \n\tAdmin: ${barsR3}HBAR - ${nbTokensR3} Tokens\
+    \n\tAccount A: ${barsA3}HBAR - ${nbTokensA3} Tokens\
+    \n\tAccount B: ${barsB3}HBAR - ${nbTokensB3} Tokens\
+    \n`
+  );
+
+  console.log('============== FIN ===========');
 
   client.close();
+
+  return;
+}
+
+async function updateRoyaltyFees(client, feeScheduleKey, tokenId, customFee) {
+  //Create the transaction and freeze for manual signing
+  const tx = await new TokenFeeScheduleUpdateTransaction()
+    .setTokenId(tokenId)
+    .setCustomFees(customFee)
+    .freezeWith(client)
+    .sign(feeScheduleKey);
+
+  const txResp = await tx.execute(client);
+
+  const { status } = await txResp.getReceipt(client);
+
+  return status.toString();
+}
+
+async function queryAccountBalance(client, accountId) {
+  const { hbars, tokens } = await new AccountBalanceQuery()
+    .setAccountId(accountId)
+    .execute(client);
+
+  return { balanceInBars: hbars, nbTokens: tokens?.toString() };
+}
+
+async function associateNFTAndUser(client, tokenId, accountId, accountKey) {
+  const tx = await new TokenAssociateTransaction()
+    .setAccountId(accountId)
+    .setTokenIds([tokenId])
+    .freezeWith(client)
+    .sign(accountKey);
+
+  const txResp = await tx.execute(client);
+
+  const { status } = await txResp.getReceipt(client);
+
+  return status.toString();
+}
+
+async function transferNFT(
+  client,
+  tokenId,
+  nftOwnerId,
+  nftReceiverId,
+  account1Key
+) {
+  const tx = await new TransferTransaction()
+    .addNftTransfer(tokenId, 1, nftOwnerId, nftReceiverId)
+    .freezeWith(client)
+    .sign(account1Key);
+
+  const txResp = await tx.execute(client);
+
+  const { status } = await txResp.getReceipt(client);
+
+  return status.toString();
+}
+
+async function mintNFT(client, tokenId, supplyKey, metadataArray) {
+  const tx = await new TokenMintTransaction()
+    .setTokenId(tokenId)
+    .setMetadata(metadataArray)
+    .freezeWith(client)
+    .sign(supplyKey);
+
+  const txResp = await tx.execute(client);
+
+  const { status } = await txResp.getReceipt(client);
+
+  return status.toString();
+}
+
+async function updateNFTMemo(client, adminKey, tokenId, newMemo) {
+  const tx = await new TokenUpdateTransaction()
+    .setTokenId(tokenId)
+    .setAdminKey(adminKey)
+    .setTokenMemo(newMemo)
+    .freezeWith(client)
+    .sign(adminKey);
+
+  const txResp = await tx.execute(client);
+
+  const { status } = await txResp.getReceipt(client);
+
+  return status.toString();
+}
+
+async function createNFT(
+  client,
+  adminKey,
+  feeScheduleKey,
+  supplyKey,
+  memo,
+  treasuryAccId,
+  customFees
+) {
+  const tx = await new TokenCreateTransaction()
+    .setTokenName('DroidZed NFT Collection')
+    .setTokenMemo(memo)
+    .setTokenSymbol('DRZ')
+    .setTreasuryAccountId(treasuryAccId)
+    .setTokenType(TokenType.NonFungibleUnique)
+    .setCustomFees(customFees)
+    .setSupplyType(TokenSupplyType.Finite)
+    .setMaxSupply(250)
+    .setSupplyKey(supplyKey)
+    .setFeeScheduleKey(feeScheduleKey)
+    .setAdminKey(adminKey.publicKey)
+    .setMaxTransactionFee(100000)
+    .freezeWith(client)
+    .sign(adminKey);
+
+  const txResp = await tx.execute(client);
+
+  const { tokenId, status } = await txResp.getReceipt(client);
+
+  return { tokenId, status: status.toString() };
+}
+
+function generateRoyaltyFee(adminId, numerator, denominator) {
+  //Create a royalty fee
+  return new CustomRoyaltyFee()
+    .setNumerator(numerator)
+    .setDenominator(denominator)
+    .setFeeCollectorAccountId(adminId)
+    .setFallbackFee(
+      new CustomFixedFee()
+        .setHbarAmount(new Hbar(1))
+        .setFeeCollectorAccountId(adminId)
+    );
+}
+
+async function createAccount(client, adminKey, accountPrivKey) {
+  //Create the transaction
+  const tx = await new AccountCreateTransaction()
+    .setKey(accountPrivKey.publicKey)
+    .setInitialBalance(Hbar.fromTinybars(1000))
+    .freezeWith(client)
+    .sign(adminKey);
+
+  const txResp = await tx.execute(client);
+
+  const { accountId, status } = await txResp.getReceipt(client);
+
+  return { accountId, status: status.toString() };
 }
 
 main().catch((err) => {
   console.error(err);
+  process.exit(-1);
 });
