@@ -6,91 +6,113 @@ import {
   ContractCreateFlow,
   ContractFunctionParameters,
   AccountId,
+  Hbar,
   PrivateKey,
+  EvmAddress,
+  ContractInfoQuery,
 } from '@hashgraph/sdk';
 
 import { ACC_ID, PRIV_KEY } from './config/env.js';
 
-// Read the compiled contract bytecode and ABI
-const contractData = readFileSync('HelloHedera.json', 'utf-8');
-const { bytecode, abi } = JSON.parse(contractData);
-
 async function main() {
-  const myAccountId = AccountId.fromString(ACC_ID);
-  const myPrivateKey = PrivateKey.fromString(PRIV_KEY);
+  // Read the compiled contract bytecode and ABI
+  const contractData = readFileSync('HelloHedera.json', 'utf-8');
+  const { bytecode, abi } = JSON.parse(contractData);
 
-  const client = Client.forTestnet();
-  client.setOperator(myAccountId, myPrivateKey);
+  const operatorID = AccountId.fromString(ACC_ID);
+  const operatorKey = PrivateKey.fromString(PRIV_KEY);
 
-  if (!client) {
-    return;
-  }
+  const client = Client.forTestnet().setOperator(operatorID, operatorKey);
 
-  const contractID = await deployContract(client);
-
-  if (!contractID) {
-    return;
-  }
-
-  await callGetAddress(client, contractID.toString());
-
-  await callSetAddress(
+  const { contractId, status } = await deployContract(
     client,
-    contractID.toString(),
-    '0x98e268680db0ff02dfa8131a4074893c464aaaaa'
+    operatorKey,
+    bytecode
   );
 
-  await callGetAddress(client, contractID.toString());
+  console.log(`>> Contract creation status: ${status}\n`);
+
+  const contractInfo = await getContractInfo(client, contractId);
+
+  console.log(`>> My contract's info: ${JSON.stringify(contractInfo)}\n`);
+
+  const currentAddr = await getAddress(client, contractId);
+
+  console.log(`>> Current address: ${currentAddr}\n`);
+
+  const setAddrStatus = await setAddress(
+    client,
+    contractId,
+    '0x98e268680db0ff02dfa8131a4074893c464aaaaa',
+    operatorKey
+  );
+
+  console.log(`>> Address update status: ${setAddrStatus}\n`);
+
+  const newAddr = await getAddress(client, contractId);
+
+  console.log(`>> New address: ${newAddr}\n`);
+
+  console.log('============== FIN ===========');
 
   client.close();
 }
 
-async function deployContract(client) {
-  const contractCreate = new ContractCreateFlow()
-    .setGas(100_000)
+async function deployContract(client, adminKey, byteCode) {
+  const txResp = await new ContractCreateFlow()
+    .setAdminKey(adminKey)
+    .setBytecode(byteCode)
     .setConstructorParameters(
       new ContractFunctionParameters().addAddress(
         '0x98e268680db0ff02dfa8131a4074893c464aeacd'
       )
     )
-    .setBytecode(bytecode);
+    .setGas(100_000)
+    .sign(adminKey)
+    .execute(client);
 
-  const txResponse = await contractCreate.execute(client);
-  const receipt = await txResponse.getReceipt(client);
-  const newContractId = receipt.contractId;
+  const txReceipt = await txResp.getReceipt(client);
 
-  console.log(`The new contract id is ${newContractId}`);
-  return newContractId;
+  return { contractId: txReceipt.contractId, status: txReceipt.status };
 }
 
-async function callSetAddress(client, contractId, newAddress) {
-  const contractExecTx = new ContractExecuteTransaction()
+async function getContractInfo(client, contractId) {
+  return await new ContractInfoQuery()
     .setContractId(contractId)
-    .setGas(100000)
+    .execute(client);
+}
+
+async function getAddress(client, contractId) {
+  const txRes = await new ContractCallQuery()
+    .setContractId(contractId)
+    .setGas(210_000)
+    .setFunction('get_address')
+    .execute(client);
+
+  return txRes.getAddress();
+}
+
+async function setAddress(client, contractId, newAddress, adminKey) {
+  const tx = await new ContractExecuteTransaction()
+    .setContractId(contractId)
+    .setGas(100_000)
     .setFunction(
       'set_address',
       new ContractFunctionParameters().addAddress(newAddress)
-    );
+    )
+    .freezeWith(client)
+    .sign(adminKey);
 
-  const submitExecTx = await contractExecTx.execute(client);
-  const receipt = await submitExecTx.getReceipt(client);
+  const txResp = await tx.execute(client);
 
-  console.log('The transaction status is ' + receipt.status.toString());
+  const txReceipt = await txResp.getReceipt(client);
+
+  return txReceipt.status;
 }
 
-async function callGetAddress(client, contractId) {
-  const getAddress = new ContractCallQuery()
-    .setContractId(contractId)
-    .setGas(210_000)
-    .setFunction('get_address');
-
-  const contractCallResult = await getAddress.execute(client);
-  const address = contractCallResult.getAddress();
-
-  console.log('Address:', address);
-}
-
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main()
+  .then()
+  .catch((err) => {
+    console.error(err);
+    process.exit(-1);
+  });

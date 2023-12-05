@@ -1,4 +1,4 @@
-//@ts-nocheck
+// @ts-nocheck
 import {
   AccountBalanceQuery,
   AccountCreateTransaction,
@@ -32,7 +32,7 @@ async function main() {
   const account1pbk = account1pvk.publicKey;
   const account1T = await new AccountCreateTransaction()
     .setKey(account1pbk)
-    .setInitialBalance(Hbar.fromTinybars(1000))
+    .setInitialBalance(new Hbar(1000))
     .execute(client);
 
   const rec1 = await account1T.getReceipt(client);
@@ -43,7 +43,7 @@ async function main() {
   const account2pbk = account2pvk.publicKey;
   const account2T = await new AccountCreateTransaction()
     .setKey(account2pbk)
-    .setInitialBalance(Hbar.fromTinybars(1000))
+    .setInitialBalance(new Hbar(1000))
     .execute(client);
 
   const rec2 = await account2T.getReceipt(client);
@@ -80,6 +80,8 @@ async function main() {
   const tokenInfo = await new TokenInfoQuery()
     .setTokenId(nftCreateRx.tokenId)
     .execute(client);
+
+  console.log(`Token info: ${tokenInfo}`);
 
   //Update the NFT collection memo
   const newMemo = 'Lightency collection.';
