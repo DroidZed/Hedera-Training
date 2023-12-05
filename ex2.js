@@ -62,7 +62,6 @@ async function main() {
   console.log(
     `>> 1st Account Creation status: ${accStatus1}\n\tCreated acc id: ${accountId1}\n`
   );
-
   const { accountId: accountId2, status: accStatus2 } = await createAccount(
     client,
     operatorPrivKey,
@@ -73,7 +72,6 @@ async function main() {
   );
 
   const royaltyFee = generateRoyaltyFee(operatorId, 5, 100);
-
   const { tokenId, status: tokenCreationStatus } = await createNFT(
     client,
     operatorPrivKey,
@@ -93,7 +91,6 @@ async function main() {
     .execute(client);
   console.log('>> Created token:');
   console.table(createdTokenInfo);
-
   console.log('\n');
 
   const tokenUpdateStatus = await updateNFTMemo(
@@ -112,7 +109,6 @@ async function main() {
     .execute(client);
   console.log(`>> Updated token info:`);
   console.table(updatedTokenInfo);
-
   console.log('\n');
 
   const metadataUint8Array = [encoder.encode('Z-NFT-v1.0')];
@@ -123,7 +119,6 @@ async function main() {
     supplyKey,
     metadataUint8Array
   );
-
   console.log(`>> First token mined status: ${firstMintStatus}\n`);
 
   const tokenAssocStatus = await associateNFTAndUser(
@@ -132,11 +127,8 @@ async function main() {
     accountId1,
     accKey1
   );
-
   console.log(`>> First token associated status: ${tokenAssocStatus}\n`);
 
-  const { balanceInBars: barsR, nbTokens: nbTokensR } =
-    await queryAccountBalance(client, operatorId);
   const { balanceInBars: barsA, nbTokens: nbTokensA } =
     await queryAccountBalance(client, operatorId);
   const { balanceInBars: barsB, nbTokens: nbTokensB } =
@@ -145,7 +137,6 @@ async function main() {
   console.log(
     `
     Accounts balance before transfer:\
-    \n\tAdmin: ${barsR}HBAR - ${nbTokensR} Tokens\
     \n\tAccount A: ${barsA}HBAR - ${nbTokensA} Tokens\
     \n\tAccount B: ${barsB}HBAR - ${nbTokensB} Tokens\
     \n`
@@ -154,24 +145,22 @@ async function main() {
   const nftTransferStatus = await transferNFT(
     client,
     tokenId,
+    1,
+    operatorId,
     accountId1,
-    accountId2,
     accKey1
   );
 
   console.log(`>> NFT transfer status: ${nftTransferStatus}\n`);
 
-  const { balanceInBars: barsR2, nbTokens: nbTokensR2 } =
-    await queryAccountBalance(client, operatorId);
   const { balanceInBars: barsA2, nbTokens: nbTokensA2 } =
     await queryAccountBalance(client, operatorId);
   const { balanceInBars: barsB2, nbTokens: nbTokensB2 } =
-    await queryAccountBalance(client, operatorId);
+    await queryAccountBalance(client, accountId2);
 
   console.log(
     `
-    Accounts balance after transfer:\
-    \n\tAdmin: ${barsR2}HBAR - ${nbTokensR2} Tokens\
+    Accounts balance after second transfer:\
     \n\tAccount A: ${barsA2}HBAR - ${nbTokensA2} Tokens\
     \n\tAccount B: ${barsB2}HBAR - ${nbTokensB2} Tokens\
     \n`
@@ -185,7 +174,7 @@ async function main() {
     client,
     feeScheduleKey,
     tokenId,
-    newRoyaltyFee
+    [newRoyaltyFee]
   );
 
   console.log(`>> NFT royalty update fee status: ${royaltyFeeUpdateStatus}\n`);
@@ -204,33 +193,31 @@ async function main() {
   const tokenAssocStatus2 = await associateNFTAndUser(
     client,
     tokenId,
-    accountId1,
-    accKey1
+    accountId2,
+    accKey2
   );
 
-  console.log(`>> First token associated status: ${tokenAssocStatus2}\n`);
+  console.log(`>> Second token associated status: ${tokenAssocStatus2}\n`);
 
   const nftTransferStatus2 = await transferNFT(
     client,
     tokenId,
-    accountId1,
+    2,
+    operatorId,
     accountId2,
-    accKey1
+    accKey2
   );
 
   console.log(`>> NFT transfer status: ${nftTransferStatus2}\n`);
 
-  const { balanceInBars: barsR3, nbTokens: nbTokensR3 } =
-    await queryAccountBalance(client, operatorId);
   const { balanceInBars: barsA3, nbTokens: nbTokensA3 } =
     await queryAccountBalance(client, operatorId);
   const { balanceInBars: barsB3, nbTokens: nbTokensB3 } =
-    await queryAccountBalance(client, operatorId);
+    await queryAccountBalance(client, accountId2);
 
   console.log(
     `
     Accounts balance after second transfer:\
-    \n\tAdmin: ${barsR3}HBAR - ${nbTokensR3} Tokens\
     \n\tAccount A: ${barsA3}HBAR - ${nbTokensA3} Tokens\
     \n\tAccount B: ${barsB3}HBAR - ${nbTokensB3} Tokens\
     \n`
@@ -245,13 +232,14 @@ async function main() {
 
 async function updateRoyaltyFees(client, feeScheduleKey, tokenId, customFee) {
   //Create the transaction and freeze for manual signing
-  const tx = await new TokenFeeScheduleUpdateTransaction()
+  const tx = new TokenFeeScheduleUpdateTransaction()
     .setTokenId(tokenId)
     .setCustomFees(customFee)
-    .freezeWith(client)
-    .sign(feeScheduleKey);
+    .freezeWith(client);
 
-  const txResp = await tx.execute(client);
+  const signedTx = await tx.sign(feeScheduleKey);
+
+  const txResp = await signedTx.execute(client);
 
   const { status } = await txResp.getReceipt(client);
 
@@ -266,14 +254,15 @@ async function queryAccountBalance(client, accountId) {
   return { balanceInBars: hbars, nbTokens: tokens?.toString() };
 }
 
-async function associateNFTAndUser(client, tokenId, accountId, accountKey) {
-  const tx = await new TokenAssociateTransaction()
-    .setAccountId(accountId)
+async function associateNFTAndUser(client, tokenId, nftOwnerId, nftOwnerKey) {
+  const tx = new TokenAssociateTransaction()
+    .setAccountId(nftOwnerId)
     .setTokenIds([tokenId])
-    .freezeWith(client)
-    .sign(accountKey);
+    .freezeWith(client);
 
-  const txResp = await tx.execute(client);
+  const signedTx = await tx.sign(nftOwnerKey);
+
+  const txResp = await signedTx.execute(client);
 
   const { status } = await txResp.getReceipt(client);
 
@@ -283,16 +272,18 @@ async function associateNFTAndUser(client, tokenId, accountId, accountKey) {
 async function transferNFT(
   client,
   tokenId,
+  serialNumber,
   nftOwnerId,
   nftReceiverId,
-  account1Key
+  nftReceiverKey
 ) {
-  const tx = await new TransferTransaction()
-    .addNftTransfer(tokenId, 1, nftOwnerId, nftReceiverId)
-    .freezeWith(client)
-    .sign(account1Key);
+  const tx = new TransferTransaction()
+    .addNftTransfer(tokenId, serialNumber, nftOwnerId, nftReceiverId)
+    .freezeWith(client);
 
-  const txResp = await tx.execute(client);
+  const signedTx = await tx.sign(nftReceiverKey);
+
+  const txResp = await signedTx.execute(client);
 
   const { status } = await txResp.getReceipt(client);
 
@@ -300,13 +291,14 @@ async function transferNFT(
 }
 
 async function mintNFT(client, tokenId, supplyKey, metadataArray) {
-  const tx = await new TokenMintTransaction()
+  const tx = new TokenMintTransaction()
     .setTokenId(tokenId)
     .setMetadata(metadataArray)
-    .freezeWith(client)
-    .sign(supplyKey);
+    .freezeWith(client);
 
-  const txResp = await tx.execute(client);
+  const signedTx = await tx.sign(supplyKey);
+
+  const txResp = await signedTx.execute(client);
 
   const { status } = await txResp.getReceipt(client);
 
@@ -314,14 +306,15 @@ async function mintNFT(client, tokenId, supplyKey, metadataArray) {
 }
 
 async function updateNFTMemo(client, adminKey, tokenId, newMemo) {
-  const tx = await new TokenUpdateTransaction()
+  const tx = new TokenUpdateTransaction()
     .setTokenId(tokenId)
     .setAdminKey(adminKey)
     .setTokenMemo(newMemo)
-    .freezeWith(client)
-    .sign(adminKey);
+    .freezeWith(client);
 
-  const txResp = await tx.execute(client);
+  const signedTx = await tx.sign(adminKey);
+
+  const txResp = await signedTx.execute(client);
 
   const { status } = await txResp.getReceipt(client);
 
@@ -337,7 +330,8 @@ async function createNFT(
   treasuryAccId,
   customFees
 ) {
-  const tx = await new TokenCreateTransaction()
+  const tx = new TokenCreateTransaction()
+    .setAdminKey(adminKey)
     .setTokenName('DroidZed NFT Collection')
     .setTokenMemo(memo)
     .setTokenSymbol('DRZ')
@@ -348,16 +342,32 @@ async function createNFT(
     .setMaxSupply(250)
     .setSupplyKey(supplyKey)
     .setFeeScheduleKey(feeScheduleKey)
-    .setAdminKey(adminKey.publicKey)
     .setMaxTransactionFee(100000)
-    .freezeWith(client)
-    .sign(adminKey);
+    .freezeWith(client);
 
-  const txResp = await tx.execute(client);
+  const signedTx = await tx.sign(adminKey);
+
+  const txResp = await signedTx.execute(client);
 
   const { tokenId, status } = await txResp.getReceipt(client);
 
   return { tokenId, status: status.toString() };
+}
+
+async function createAccount(client, adminKey, accountPrivKey) {
+  //Create the transaction
+  const tx = new AccountCreateTransaction()
+    .setKey(accountPrivKey.publicKey)
+    .setInitialBalance(Hbar.fromTinybars(1000))
+    .freezeWith(client);
+
+  const signedTx = await tx.sign(adminKey);
+
+  const txResp = await signedTx.execute(client);
+
+  const { accountId, status } = await txResp.getReceipt(client);
+
+  return { accountId, status: status.toString() };
 }
 
 function generateRoyaltyFee(adminId, numerator, denominator) {
@@ -371,21 +381,6 @@ function generateRoyaltyFee(adminId, numerator, denominator) {
         .setHbarAmount(new Hbar(1))
         .setFeeCollectorAccountId(adminId)
     );
-}
-
-async function createAccount(client, adminKey, accountPrivKey) {
-  //Create the transaction
-  const tx = await new AccountCreateTransaction()
-    .setKey(accountPrivKey.publicKey)
-    .setInitialBalance(Hbar.fromTinybars(1000))
-    .freezeWith(client)
-    .sign(adminKey);
-
-  const txResp = await tx.execute(client);
-
-  const { accountId, status } = await txResp.getReceipt(client);
-
-  return { accountId, status: status.toString() };
 }
 
 main().catch((err) => {
