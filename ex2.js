@@ -10,12 +10,12 @@ Using Token Service :
 **Edit NFT memo
 **Display NFT information with modification made
 **Mint an NFT on the collection (metadata to be specified are free)
-*!Transfer NFT from account A to account B
-*?Display the balance of the various accounts involved (account A, account B and account defined as receiving royalty fees)
-*?Modify custom fees to increase royalty percentage to 10%.
-*?Mine a second NFT from the collection
-*?Transfer the second NFT from account A to account B
-*?Display the balance of the various accounts involved (account A, account B and account defined as receiving royalty fees)
+**Transfer NFT from account A to account B
+**Display the balance of the various accounts involved (account A, account B and account defined as receiving royalty fees)
+**Modify custom fees to increase royalty percentage to 10%.
+**Mine a second NFT from the collection
+**Transfer the second NFT from account A to account B
+**Display the balance of the various accounts involved (account A, account B and account defined as receiving royalty fees)
 
  */
 
